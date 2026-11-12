@@ -36,5 +36,13 @@
     "static-analysis"
   ],
   "license": "Apache-2.0",
-  "author": "Mycel"
+  "author": "Mycel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boy-373/utcp-lint.git"
+  },
+  "bugs": {
+    "url": "https://github.com/boy-373/utcp-lint/issues"
+  },
+  "homepage": "https://github.com/boy-373/utcp-lint#readme"
 }
