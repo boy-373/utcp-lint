@@ -1,11 +1,6 @@
 {
-  "utcp_version": "1.0.0",
+  "utcp_version": "1.2.0",
   "manual_version": "1.0.0",
-  "info": {
-    "title": "Weather and Docs API",
-    "version": "1.0.0",
-    "description": "A well-formed UTCP manual used as a passing fixture."
-  },
   "tools": [
     {
       "name": "get_weather",
@@ -13,9 +8,13 @@
       "inputs": {
         "type": "object",
         "properties": {
-          "location": { "type": "string" }
+          "location": {
+            "type": "string"
+          }
         },
-        "required": ["location"]
+        "required": [
+          "location"
+        ]
       },
       "tool_call_template": {
         "call_template_type": "http",
@@ -35,7 +34,9 @@
       "inputs": {
         "type": "object",
         "properties": {
-          "q": { "type": "string" }
+          "q": {
+            "type": "string"
+          }
         }
       },
       "tool_call_template": {
@@ -47,7 +48,10 @@
     {
       "name": "local_dev_echo",
       "description": "Echo endpoint used during local development only.",
-      "inputs": { "type": "object", "properties": {} },
+      "inputs": {
+        "type": "object",
+        "properties": {}
+      },
       "tool_call_template": {
         "call_template_type": "http",
         "url": "http://localhost:8000/echo",

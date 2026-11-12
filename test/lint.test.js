@@ -181,7 +181,135 @@ test('rule selection: --only limits the run', async () => {
 
 test('rule selection: --skip removes a rule', async () => {
   const result = await run({ inputs: [join(FIXTURES, 'vulnerable-utcp.json')], cwd: FIXTURES, skip: ['R1'] });
-  assert.ok(result.findings.every((f) => f.rule === 'R3'), 'no R1 findings expected');
+  assert.ok(result.findings.every((f) => f.rule !== 'R1'), 'no R1 findings expected');
+});
+
+// --- R2: the target that is validated is not the target that is called -------
+
+test('R2: a hostname that imitates localhost is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/loopback-prefix');
+  assert.ok(hit, 'expected R2/loopback-prefix on localhost.evil.com');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R2: metadata address encoded through wildcard DNS is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/wildcard-dns-metadata');
+  assert.ok(hit, 'expected R2/wildcard-dns-metadata on 169.254.169.254.nip.io');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R2: R1 cannot see a metadata address hidden behind wildcard DNS', async () => {
+  // The whole reason R2 exists: the host is a name, not a literal, so the
+  // address layer in R1 has nothing to classify.
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R1'] });
+  const hit = result.findings.find(
+    (f) => f.toolName === 'metadata_via_wildcard_dns' && f.severity === 'error',
+  );
+  assert.equal(hit, undefined, 'R1 must not claim to catch this — R2 does');
+});
+
+test('R2: wildcard DNS wrapping a private address is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/wildcard-dns-private');
+  assert.ok(hit, 'expected R2/wildcard-dns-private on 10-0-0-5.nip.io');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R2: a URL shortener is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/shortener');
+  assert.ok(hit, 'expected R2/shortener on bit.ly');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R2: a tunnel endpoint is a warning, not an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/tunnel');
+  assert.ok(hit, 'expected R2/tunnel on ngrok.io');
+  assert.equal(hit.severity, 'warning');
+});
+
+test('R2: a public hostname that resolves to loopback is a warning', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'redirect-traps.json')], cwd: FIXTURES, only: ['R2'] });
+  const hit = result.findings.find((f) => f.check === 'R2/loopback-alias');
+  assert.ok(hit, 'expected R2/loopback-alias on localtest.me');
+  assert.equal(hit.severity, 'warning');
+});
+
+test('R2: a plain localhost target is not flagged', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'clean-utcp.json')], cwd: FIXTURES, only: ['R2'] });
+  assert.deepEqual(result.findings, [], 'http://localhost:8000/echo is legitimate local development');
+});
+
+// --- R4: the manual must be a manual a client can load ----------------------
+
+test('R4: an info block is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/unknown-field' && f.pointer === 'info');
+  assert.ok(hit, 'expected R4/unknown-field on info');
+  assert.equal(hit.severity, 'error');
+  assert.match(hit.message, /TypeError/, 'the message should say how it fails, not just that it is wrong');
+});
+
+test('R4: every non-UtcpManual top-level field is reported', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const pointers = result.findings
+    .filter((f) => f.check === 'R4/unknown-field')
+    .map((f) => f.pointer)
+    .sort();
+  assert.deepEqual(pointers, ['info', 'metadata']);
+});
+
+test('R4: a duplicate tool name is a warning', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/duplicate-tool-name');
+  assert.ok(hit, 'expected R4/duplicate-tool-name');
+  assert.equal(hit.severity, 'warning');
+});
+
+test('R4: an unnamed tool is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/tool-no-name');
+  assert.ok(hit, 'expected R4/tool-no-name');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R4: a tool with no call template is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/tool-no-template');
+  assert.ok(hit, 'expected R4/tool-no-template');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R4: a template with no transport type is an error', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/template-no-type');
+  assert.ok(hit, 'expected R4/template-no-type');
+  assert.equal(hit.severity, 'error');
+});
+
+test('R4: a tool with no description is a warning', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'manual-shape.json')], cwd: FIXTURES, only: ['R4'] });
+  const hit = result.findings.find((f) => f.check === 'R4/tool-no-description');
+  assert.ok(hit, 'expected R4/tool-no-description');
+  assert.equal(hit.severity, 'warning');
+});
+
+test('R4: a well-formed manual is silent', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'clean-utcp.json')], cwd: FIXTURES, only: ['R4'] });
+  assert.deepEqual(result.findings, []);
+});
+
+test('R4: an MCP config is not judged as a manual', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'mcp-config.json')], cwd: FIXTURES, only: ['R4'] });
+  assert.deepEqual(result.findings, [], 'mcpServers is a different format with different rules');
+});
+
+test('R4: an empty tools array is a warning', async () => {
+  const result = await run({ inputs: [join(FIXTURES, 'openapi-metadata.json')], cwd: FIXTURES, only: ['R4'] });
+  assert.deepEqual(result.findings, [], 'OpenAPI documents are not UTCP manuals');
 });
 
 test('jsonc: comments and trailing commas are stripped', () => {

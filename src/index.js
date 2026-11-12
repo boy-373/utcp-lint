@@ -6,7 +6,9 @@ import { resolve, basename } from 'node:path';
 import { statSync } from 'node:fs';
 import { resolve4, resolve6 } from 'node:dns/promises';
 import * as r1 from './rules/r1-target.js';
+import * as r2 from './rules/r2-redirect.js';
 import * as r3 from './rules/r3-auth.js';
+import * as r4 from './rules/r4-manual.js';
 import { loadDocument, expandInputs, displayPath } from './loader.js';
 
 /**
@@ -27,11 +29,13 @@ function looksLikeConfigName(file) {
  * @typedef {Object} RuleModule
  * @property {string} id
  * @property {string} title
- * @property {(target: any, opts?: any) => Promise<any[]>} check
+ * @property {'target'|'document'} [scope]  defaults to 'target'
+ * @property {(target: any, opts?: any) => Promise<any[]>} [check]
+ * @property {(ctx: {kind: string, data: any, file: string}) => any[]} [checkDocument]
  */
 
 /** @type {RuleModule[]} */
-export const RULES = [r1, r3];
+export const RULES = [r1, r2, r3, r4];
 
 /** @type {Map<string, RuleModule>} */
 export const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
@@ -97,7 +101,9 @@ export async function run(options = {}) {
   const only = options.only && options.only.length > 0 ? new Set(options.only) : null;
   const skip = new Set(options.skip ?? []);
 
-  const active = RULES.filter((r) => (!only || only.has(r.id)) && !skip.has(r.id));
+  const selected = RULES.filter((r) => (!only || only.has(r.id)) && !skip.has(r.id));
+  const active = selected.filter((r) => (r.scope ?? 'target') === 'target');
+  const activeDocument = selected.filter((r) => r.scope === 'document');
 
   const files = expandInputs(inputs, cwd);
   /** @type {Array<any>} */
@@ -138,6 +144,25 @@ export async function run(options = {}) {
     filesScanned += 1;
     for (const note of doc.notes) {
       notes.push(`${displayPath(file, cwd)}: ${note}`);
+    }
+
+    // Document-level rules judge the file as a whole, so they run once,
+    // before the per-target loop.
+    for (const rule of activeDocument) {
+      const docFindings = rule.checkDocument({
+        kind: doc.kind,
+        data: doc.data,
+        file: displayPath(file, cwd),
+      });
+      for (const f of docFindings) {
+        findings.push({
+          ...f,
+          file: displayPath(file, cwd),
+          pointer: f.pointer ?? '',
+          toolName: undefined,
+          url: undefined,
+        });
+      }
     }
 
     for (const target of doc.targets) {

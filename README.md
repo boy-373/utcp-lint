@@ -1,6 +1,6 @@
 # utcp-lint
 
-**Catch SSRF and credential leaks in UTCP manuals, MCP server configs and OpenAPI specs — before they reach CI.**
+**A static check for CVE-2026-45366 and CVE-2026-101060 — the two SSRF bugs in the UTCP reference implementations — plus the credential leaks and manual-schema mistakes that neither CVE covers.**
 
 One command, zero dependencies, no network calls unless you ask for them.
 
@@ -22,6 +22,38 @@ configs/agent.json
 
 2 files · 9 targets · 2 errors · 0 warnings
 ```
+
+---
+
+## The two CVEs
+
+Both are fixed upstream. Both are still reachable through configuration, which is why a linter exists.
+
+### CVE-2026-45366 — `@utcp/http` before 1.1.2 (CVSS 4.7, CWE-918)
+
+The validated URL and the called URL were different URLs. `registerManual()` checked the discovery URL against an HTTPS / loopback allowlist, `callTool()` then reused the resolved `toolCallTemplate.url` without re-checking, and `OpenApiConverter` trusted whatever `servers[0].url` the spec declared. A spec hosted on a legitimate HTTPS endpoint could declare:
+
+```json
+{ "servers": [{ "url": "http://169.254.169.254" }] }
+```
+
+and the converter built tools that pointed straight at the instance metadata service.
+
+The discovery-time guard had a second flaw: it was a `startsWith("http://localhost")` prefix test, so `http://localhost.evil.com` — an ordinary registrable domain — passed it.
+
+→ `R2/loopback-prefix`, `R2/wildcard-dns-metadata`
+
+### CVE-2026-101060 — `python-utcp` before 1.1.4 (CVSS 8.4, CWE-918)
+
+The validated URL and the fetched URL were different URLs, one hop later. `HttpCommunicationProtocol.call_tool` validated the initial tool URL, then followed HTTP redirects without revalidating the target. An endpoint under attacker control answers `302 Location: http://169.254.169.254/…` and the client returns the internal response body to the caller.
+
+→ `R2/shortener`, `R2/tunnel`
+
+### What upgrading does not fix
+
+Pinning `utcp-http >= 1.1.2` and `utcp >= 1.1.4` closes the library bug. It does not close the manual. A config that points at a URL shortener, at a wildcard-DNS hostname, or at a host that merely *starts with* `localhost` reintroduces the same trust-boundary gap no matter which client version reads it — the client is doing exactly what the manual told it to do.
+
+That residue is what `utcp-lint` reads: the manual, at commit time, before any client sees it.
 
 ---
 
@@ -69,6 +101,30 @@ Three layers, because there are three ways to get this wrong:
 
 Loopback is allowed on purpose: local development is legitimate, and every runtime guard in this space allows it too.
 
+### R2 — the trust boundary
+
+The address rules in R1 answer "where does this point". R2 answers a different question: **is the URL that was reviewed the URL that will be called.** That is the shape of both CVEs above, and configuration can reintroduce it after the libraries are patched.
+
+| Check | What it catches | Severity |
+|---|---|---|
+| `R2/loopback-prefix` | `localhost.evil.com`, `127.0.0.1.attacker.tld` — a hostname that only *begins with* a trusted label (CVE-2026-45366) | error |
+| `R2/wildcard-dns-metadata` | `169.254.169.254.nip.io` and `169-254-169-254.nip.io` — IMDS reached through a hostname | error |
+| `R2/wildcard-dns-private` | RFC 1918, CGNAT or ULA encoded in `nip.io`, `sslip.io`, `xip.io`, `traefik.me` | error |
+| `R2/wildcard-dns` | any other address wrapped in a wildcard-DNS hostname | warning |
+| `R2/shortener` | `bit.ly`, `t.cn`, `tinyurl.com` and a dozen more — the destination is decided after review (CVE-2026-101060) | error |
+| `R2/tunnel` | `ngrok.io`, `trycloudflare.com`, `loca.lt`, `serveo.net` — the endpoint changes with whoever holds the tunnel | warning |
+| `R2/loopback-alias` | `localtest.me`, `lvh.me`, `vcap.me` — public names that resolve to 127.0.0.1 by design | warning |
+| `R2/relative-target` | `/api/v1` — no origin at all, so the loader decides where the call goes | warning |
+
+The wildcard-DNS checks are the ones R1 structurally cannot do. `169.254.169.254.nip.io` is a *name*, not a literal address, so the address classifier in R1 has nothing to look at — and every hostname allowlist in every client waves it through. R2 decodes the address back out of the hostname and hands it to the same classifier R1 uses.
+
+```bash
+# what R2 sees that a hostname allowlist does not
+169.254.169.254.nip.io     → 169.254.169.254  (AWS/Azure/GCP IMDS)   error
+10-0-0-5.nip.io            → 10.0.0.5         (RFC 1918)            error
+8.8.8.8.nip.io             → 8.8.8.8          (public)              warning
+```
+
 ### R3 — the credential
 
 There is no CVE behind this rule. That is the point. Every scanner in this space checks whether a config *works*; none checks whether it is safe to commit.
@@ -82,6 +138,33 @@ There is no CVE behind this rule. That is the point. Every scanner in this space
 `"${GITHUB_TOKEN}"` passes. `"ghp_abc123…"` does not. That is the entire rule.
 
 Secrets are masked in all output formats, so a CI log never becomes the leak.
+
+### R4 — the manual itself
+
+This rule exists because we shipped the bug it catches. The first version of our own manual carried an `info` block — the shape every other API description format uses — and `python-utcp` rejected the entire document:
+
+```
+TypeError: UtcpManual.__init__() got an unexpected keyword argument 'info'
+```
+
+It had been served over HTTPS for an hour before anyone tried to register it. Every URL check passed, because the URLs were fine. The document simply was not a manual.
+
+`UtcpManual.model_fields` is exactly `utcp_version`, `manual_version`, `tools`. Anything else fails at load time — which is the worst time, because the build is already green and the agent is already running.
+
+| Check | What it catches | Severity |
+|---|---|---|
+| `R4/unknown-field` | any top-level field UtcpManual does not define — `info`, `metadata`, `description`, `name`, `version`, `auth` | error |
+| `R4/no-tools` | `tools` missing entirely | error |
+| `R4/tool-no-name` | a tool with no name, so no client can address it | error |
+| `R4/tool-no-template` | a tool with no `tool_call_template`, so it cannot be invoked | error |
+| `R4/template-no-type` | a template with no `call_template_type`, so the client cannot pick a transport | error |
+| `R4/tool-not-object` | a string or array sitting in `tools[]` | error |
+| `R4/empty-tools` | `tools: []` — loads fine, offers nothing | warning |
+| `R4/duplicate-tool-name` | two tools sharing one name; one of them is unreachable | warning |
+| `R4/tool-no-description` | a tool an agent will never choose, because nothing describes it | warning |
+| `R4/unknown-version` | a `utcp_version` this tool does not recognise | warning |
+
+R4 runs once per document rather than once per target, because these are properties of the file, not of a URL.
 
 ---
 
@@ -201,22 +284,26 @@ Suppression is deliberately local. A blanket ignore file that hides findings acr
 
 This tool does not replace them, and it does not claim they are broken. They run at a different time and answer a different question:
 
-| | Runtime guard (`utcp-http`) | `utcp-lint` |
+| | Runtime guard (`utcp-http` / `utcp`) | `utcp-lint` |
 |---|---|---|
 | When | at call time | at commit time |
-| Sees | scheme, redirect chain, declared loopback | scheme, resolved address, credential shape |
+| Sees | scheme, redirect chain, declared loopback | scheme, address, hostname shape, credential shape, manual schema |
 | On failure | the call is rejected | the build is rejected |
 | Catches metadata over HTTPS | no | yes |
 | Catches a literal key in a header | no | yes |
+| Catches an `info` block that makes the manual unloadable | no — it fails with a `TypeError` | yes, as a lint error |
+| Catches `169.254.169.254.nip.io` | only if `--dns` resolves it | yes, by decoding the hostname |
 
 Use both. The runtime guard is the last line; this is the first.
 
 ## Limitations
 
-- **JSON only** in 0.1.0. YAML MCP configs are not parsed yet.
-- **DNS checks are opt-in** (`--dns`), because a linter that silently makes network calls in CI is a bad citizen. Without it, a hostname that resolves to a private address is not caught.
+- **JSON only.** YAML MCP configs are not parsed yet.
+- **DNS checks are opt-in** (`--dns`), because a linter that silently makes network calls in CI is a bad citizen. Without it, a hostname that resolves to a private address is not caught — unless it is a wildcard-DNS name, which R2 decodes without touching the network.
 - **No taint tracking.** `R1/dynamic-host` warns that the destination is argument-controlled; it cannot tell you whether that argument is attacker-controlled.
-- **`env` blocks in MCP stdio configs are not scanned.** A literal token in `mcpServers.x.env` is invisible to 0.1.0.
+- **`env` blocks in MCP stdio configs are not scanned.** A literal token in `mcpServers.x.env` is invisible to this version.
+- **R2 is a blocklist, not a proof.** It knows the shorteners, tunnels and wildcard-DNS providers that exist today. A domain registered tomorrow to serve the same purpose is not on the list. The rule catches the shapes that appear in real manuals; it does not make a manual trustworthy.
+- **R4 checks structure, not semantics.** It knows `UtcpManual` has three fields. It does not validate `inputs` against JSON Schema, so a tool with a malformed parameter schema still passes.
 - Rules are deliberately few. A security tool that cries wolf gets switched off in a week.
 
 ## License

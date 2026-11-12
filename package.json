@@ -1,7 +1,7 @@
 {
   "name": "utcp-lint",
-  "version": "0.1.0",
-  "description": "Catch SSRF and credential leaks in UTCP manuals, MCP server configs and OpenAPI specs before they reach CI.",
+  "version": "0.1.1",
+  "description": "Static analysis for CVE-2026-45366 and CVE-2026-101060: catch SSRF, credential leaks and manual-schema errors in UTCP manuals, MCP configs and OpenAPI specs before they reach CI.",
   "type": "module",
   "bin": {
     "utcp-lint": "./bin/utcp-lint.js"
@@ -33,7 +33,12 @@
     "openapi",
     "agent",
     "ci",
-    "static-analysis"
+    "static-analysis",
+    "cve-2026-45366",
+    "cve-2026-101060",
+    "ssrf-detection",
+    "cve",
+    "security-scanner"
   ],
   "license": "Apache-2.0",
   "author": "Mycel",

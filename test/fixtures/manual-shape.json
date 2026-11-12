@@ -1,0 +1,56 @@
+{
+  "utcp_version": "1.2.0",
+  "manual_version": "1.0.0",
+  "info": {
+    "title": "The field that broke the first Mycel manual",
+    "description": "UtcpManual has no info block; a client rejects the whole document."
+  },
+  "metadata": { "owner": "nobody" },
+  "tools": [
+    {
+      "name": "duplicated",
+      "description": "First definition of a name that appears twice.",
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.example.com/one",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "duplicated",
+      "description": "Second definition; one of these is unreachable.",
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.example.com/two",
+        "http_method": "GET"
+      }
+    },
+    {
+      "description": "No name at all, so no client can address it.",
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.example.com/three",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "no_template",
+      "description": "Declared but not invocable."
+    },
+    {
+      "name": "no_type",
+      "description": "A template with no transport type.",
+      "tool_call_template": {
+        "url": "https://api.example.com/five"
+      }
+    },
+    {
+      "name": "no_description",
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.example.com/six",
+        "http_method": "GET"
+      }
+    }
+  ]
+}

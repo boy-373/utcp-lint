@@ -37,6 +37,7 @@ import { join, relative, resolve, extname } from 'node:path';
  * @property {'utcp'|'mcp'|'openapi'|'unknown'} kind
  * @property {Target[]} targets
  * @property {string[]} notes
+ * @property {any} [data]           the parsed document, for document-level rules
  */
 
 const CONFIG_EXTENSIONS = new Set(['.json', '.jsonc']);
@@ -357,7 +358,7 @@ function parseUtcp(doc, file) {
     });
   });
 
-  return { file, kind: 'utcp', targets, notes };
+  return { file, kind: 'utcp', targets, notes, data: doc };
 }
 
 /**
@@ -402,7 +403,7 @@ function parseMcp(doc, file) {
     }
   }
 
-  return { file, kind: 'mcp', targets, notes };
+  return { file, kind: 'mcp', targets, notes, data: doc };
 }
 
 /**
@@ -462,7 +463,7 @@ function parseOpenApi(doc, file) {
 
   if (targets.length === 0) notes.push('no servers[] and no host; nothing to check');
 
-  return { file, kind: 'openapi', targets, notes };
+  return { file, kind: 'openapi', targets, notes, data: doc };
 }
 
 /**
@@ -506,6 +507,7 @@ export function loadDocument(file) {
         kind: 'unknown',
         targets: [],
         notes: ['unrecognised document shape; expected UTCP manual, MCP config or OpenAPI'],
+        data: parsed.data,
       };
   }
 }
