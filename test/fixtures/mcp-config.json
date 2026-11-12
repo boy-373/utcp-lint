@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.github.com/mcp",
+      "headers": {
+        "Authorization": "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+    },
+    "internal-registry": {
+      "type": "http",
+      "url": "http://192.168.1.50:8080/mcp"
+    },
+    "gcp": {
+      "type": "http",
+      "url": "https://metadata.google.internal/computeMetadata/v1/"
+    }
+  }
+}

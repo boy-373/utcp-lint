@@ -1,0 +1,58 @@
+{
+  "utcp_version": "1.0.0",
+  "manual_version": "1.0.0",
+  "info": {
+    "title": "Weather and Docs API",
+    "version": "1.0.0",
+    "description": "A well-formed UTCP manual used as a passing fixture."
+  },
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get the current weather for a location.",
+      "inputs": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        },
+        "required": ["location"]
+      },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.weather.example.com/v1/current/{location}",
+        "http_method": "GET",
+        "auth": {
+          "auth_type": "api_key",
+          "api_key": "${WEATHER_API_KEY}",
+          "var_name": "X-API-Key",
+          "location": "header"
+        }
+      }
+    },
+    {
+      "name": "search_docs",
+      "description": "Search the documentation index.",
+      "inputs": {
+        "type": "object",
+        "properties": {
+          "q": { "type": "string" }
+        }
+      },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://docs.example.com/api/search",
+        "http_method": "POST"
+      }
+    },
+    {
+      "name": "local_dev_echo",
+      "description": "Echo endpoint used during local development only.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "http://localhost:8000/echo",
+        "http_method": "GET"
+      }
+    }
+  ]
+}

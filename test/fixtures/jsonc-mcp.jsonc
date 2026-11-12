@@ -1,0 +1,13 @@
+// A hand-written MCP config with comments and trailing commas.
+// utcp-lint should parse this instead of reporting "invalid JSON".
+{
+  "mcpServers": {
+    /* The internal registry is reachable only over plain HTTP. */
+    "internal": {
+      "url": "http://10.20.30.40:8080/mcp",
+    },
+    "public": {
+      "url": "https://api.example.com/mcp", // trailing comma below
+    },
+  },
+}

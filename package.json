@@ -1,0 +1,40 @@
+{
+  "name": "utcp-lint",
+  "version": "0.1.0",
+  "description": "Catch SSRF and credential leaks in UTCP manuals, MCP server configs and OpenAPI specs before they reach CI.",
+  "type": "module",
+  "bin": {
+    "utcp-lint": "./bin/utcp-lint.js"
+  },
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "lint:self": "node ./bin/utcp-lint.js test/fixtures"
+  },
+  "keywords": [
+    "utcp",
+    "mcp",
+    "a2a",
+    "lint",
+    "security",
+    "ssrf",
+    "openapi",
+    "agent",
+    "ci",
+    "static-analysis"
+  ],
+  "license": "Apache-2.0",
+  "author": "Mycel"
+}

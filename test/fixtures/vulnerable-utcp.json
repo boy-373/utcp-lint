@@ -1,0 +1,98 @@
+{
+  "utcp_version": "1.0.0",
+  "manual_version": "2.1.0",
+  "info": {
+    "title": "Internal Tooling Manual",
+    "version": "2.1.0"
+  },
+  "tools": [
+    {
+      "name": "aws_credential_reader",
+      "description": "Read the instance role credentials.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://169.254.169.254/latest/meta-data/iam/security-credentials/",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "alibaba_metadata",
+      "description": "Alibaba Cloud metadata probe.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://100.100.100.200/latest/meta-data/",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "internal_admin",
+      "description": "Internal admin panel API.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://10.0.0.5/internal-admin/users",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "legacy_billing",
+      "description": "Legacy billing endpoint.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "http://billing.example.com/v1/invoices",
+        "http_method": "GET",
+        "auth": {
+          "auth_type": "api_key",
+          "api_key": "${BILLING_API_KEY}",
+          "var_name": "Authorization",
+          "location": "header"
+        }
+      }
+    },
+    {
+      "name": "payments",
+      "description": "Charge a card.",
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://api.payments.example.com/v1/charges",
+        "http_method": "POST",
+        "auth": {
+          "auth_type": "api_key",
+          "api_key": "sk_live_0000000000000000000000",
+          "var_name": "Authorization",
+          "location": "header"
+        }
+      }
+    },
+    {
+      "name": "dynamic_host",
+      "description": "Calls whatever host the caller supplies.",
+      "inputs": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" }
+        }
+      },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://{host}/api/v1/query",
+        "http_method": "GET"
+      }
+    },
+    {
+      "name": "suppressed_example",
+      "description": "Deliberately pointing at metadata, with a written exemption.",
+      "_utcpLintIgnore": [{ "rule": "R1", "reason": "Security regression test fixture, never deployed" }],
+      "inputs": { "type": "object", "properties": {} },
+      "tool_call_template": {
+        "call_template_type": "http",
+        "url": "https://169.254.169.254/latest/meta-data/",
+        "http_method": "GET"
+      }
+    }
+  ]
+}
